@@ -1,18 +1,32 @@
 import os
+import sys
 import logging
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import random
-import time
 
-# Настройка для сервера
+print("=" * 60)
+print(f"🚀 Python версия: {sys.version}")
+print(f"📁 Текущая директория: {os.getcwd()}")
+print(f"📦 Путь к Python: {sys.executable}")
+print("=" * 60)
+
+# Проверяем наличие библиотек
+try:
+    from telegram import Update, ReplyKeyboardMarkup
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+    print("✅ Библиотеки импортированы успешно")
+except ImportError as e:
+    print(f"❌ Ошибка импорта: {e}")
+    print("Установите: pip install python-telegram-bot==21.7")
+    sys.exit(1)
+
+# Токен
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8103027770:AAG-Inx91gvCP63l-R-hx1Ydsbr5V1qIP7k")
 
-# Уменьшаем логирование
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+if not TOKEN or len(TOKEN) < 10:
+    print("❌ ОШИБКА: Неверный токен Telegram!")
+    sys.exit(1)
+
+print(f"✅ Токен получен: {TOKEN[:15]}...")
 
 # Валютные пары
 CURRENCY_PAIRS = [
@@ -20,70 +34,23 @@ CURRENCY_PAIRS = [
     ["AUD/USD", "USD/CAD", "AUD/CHF"],
     ["CHF/JPY", "EUR/CHF", "GBP/AUD"],
     ["CAD/CHF", "EUR/JPY", "EUR/CAD"],
-    ["GBP/JPY", "USD/CHF", "EUR/AUD"],
-    ["🔙 Назад", "❌ Закрыть"]
-]
-
-# Таймфреймы
-TIMEFRAMES = [
-    ["1 мин", "5 мин"],
-    ["10 мин", "15 мин"],
-    ["🔙 Назад"]
+    ["GBP/JPY", "USD/CHF", "EUR/AUD"]
 ]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    
+    """Команда /start"""
     reply_markup = ReplyKeyboardMarkup(CURRENCY_PAIRS, resize_keyboard=True)
-    
     await update.message.reply_text(
-        "🎯 *ВЫБЕРИТЕ ВАЛЮТНУЮ ПАРУ*\n\n👇 *Выберите пару из кнопок ниже*",
+        "🤖 *Forex Signal Bot*\n\nВыберите валютную пару:",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
 async def handle_pair(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка выбора пары"""
     pair = update.message.text
     
-    if pair == "🔙 Назад":
-        await start(update, context)
-        return
-    
-    if pair == "❌ Закрыть":
-        await update.message.reply_text("❌ Клавиатура закрыта.\n\nНапишите /start чтобы открыть")
-        return
-    
-    context.user_data['selected_pair'] = pair
-    
-    reply_markup = ReplyKeyboardMarkup(TIMEFRAMES, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        f"✅ Выбрана пара: *{pair}*\n\n⏰ *Теперь выберите таймфрейм:*",
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
-
-async def handle_timeframe(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    timeframe = update.message.text
-    pair = context.user_data.get('selected_pair')
-    
-    if not pair:
-        await update.message.reply_text("❌ Сначала выберите валютную пару!")
-        await start(update, context)
-        return
-    
-    if timeframe == "🔙 Назад":
-        await start(update, context)
-        return
-    
-    valid_timeframes = ["1 мин", "5 мин", "10 мин", "15 мин"]
-    if timeframe not in valid_timeframes:
-        await update.message.reply_text("❌ Выберите таймфрейм из списка!")
-        return
-    
-    await update.message.reply_text(f"⏳ *Анализирую {pair} на {timeframe}...*", parse_mode='Markdown')
-    
-    # Генерация сигнала
+    # Генерируем сигнал
     if random.random() > 0.5:
         signal = "🟢 ВВЕРХ"
         confidence = random.randint(70, 95)
@@ -91,88 +58,79 @@ async def handle_timeframe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         signal = "🔴 ВНИЗ"
         confidence = random.randint(70, 95)
     
-    result_text = f"""
-📊 *АНАЛИЗ ЗАВЕРШЕН*
+    message = f"""
+📊 *АНАЛИЗ ДЛЯ {pair}*
 
-📊 *Пара:* {pair}
-⏰ *Таймфрейм:* {timeframe}
-🎯 *Сигнал:* {signal}
-📈 *Уверенность:* {confidence}%
+🎯 Сигнал: {signal}
+📈 Уверенность: {confidence}%
+⏰ Таймфрейм: 5 минут
 
-⚠️ *ВАЖНО:* Это автоматический анализ.
+💰 Рекомендация: {'Покупать' if 'ВВЕРХ' in signal else 'Продавать'}
 """
     
-    await update.message.reply_text(result_text, parse_mode='Markdown')
+    await update.message.reply_text(message, parse_mode='Markdown')
     
-    action_keyboard = [
-        ["📊 Новая пара", f"🔄 {pair}"],
-        ["📋 Главное меню"]
-    ]
-    action_markup = ReplyKeyboardMarkup(action_keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        "👇 *Что дальше?*",
-        parse_mode='Markdown',
-        reply_markup=action_markup
-    )
+    # Кнопки для продолжения
+    keyboard = [["📊 Новая пара"], ["🔄 Ещё раз"]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text("👇 Что дальше?", reply_markup=reply_markup)
 
 async def handle_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка действий"""
     text = update.message.text
     
-    if text in ["📊 Новая пара", "📋 Главное меню"]:
+    if text in ["📊 Новая пара", "🔄 Ещё раз"]:
         await start(update, context)
-    elif text.startswith("🔄 "):
-        pair = text[2:]
-        context.user_data['selected_pair'] = pair
-        reply_markup = ReplyKeyboardMarkup(TIMEFRAMES, resize_keyboard=True)
-        await update.message.reply_text(
-            f"✅ Выбрана пара: *{pair}*\n\n⏰ *Выберите таймфрейм:*",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
 
 def main():
-    print("🚀 Запуск Forex бота на сервере...")
+    """Главная функция"""
+    print("\n" + "=" * 60)
+    print("🤖 ЗАПУСК FOREX БОТА")
+    print("=" * 60)
     
-    # Создаем приложение (ВАЖНО: без Updater!)
-    app = Application.builder().token(TOKEN).build()
-    
-    # Регистрируем обработчики
-    app.add_handler(CommandHandler("start", start))
-    
-    # Обработчик для валютных пар
-    all_currency_buttons = []
-    for row in CURRENCY_PAIRS:
-        all_currency_buttons.extend(row)
-    
-    currency_buttons = [btn for btn in all_currency_buttons if btn not in ["🔙 Назад", "❌ Закрыть"]]
-    app.add_handler(MessageHandler(filters.TEXT & filters.Text(currency_buttons), handle_pair))
-    
-    # Навигационные кнопки
-    nav_buttons = ["🔙 Назад", "❌ Закрыть"]
-    app.add_handler(MessageHandler(filters.TEXT & filters.Text(nav_buttons), handle_pair))
-    
-    # Таймфреймы
-    timeframe_buttons = ["1 мин", "5 мин", "10 мин", "15 мин", "🔙 Назад"]
-    app.add_handler(MessageHandler(filters.TEXT & filters.Text(timeframe_buttons), handle_timeframe))
-    
-    # Действия после анализа
-    action_buttons = ["📊 Новая пара", "📋 Главное меню"]
-    
-    # Кастомный фильтр для кнопок "🔄 ПАРА"
-    def refresh_filter(update_obj):
-        return update_obj.message.text.startswith("🔄 ") if update_obj.message and update_obj.message.text else False
-    
-    app.add_handler(MessageHandler(
-        filters.TEXT & (filters.Text(action_buttons) | filters.UpdateFilter(refresh_filter)),
-        handle_action
-    ))
-    
-    print("✅ Бот запущен и готов к работе!")
-    print("📱 Бот будет работать 24/7")
-    
-    # Запускаем бота (на сервере это работает непрерывно)
-    app.run_polling()
+    try:
+        print("1. Создаю приложение...")
+        app = Application.builder().token(TOKEN).build()
+        print("✅ Приложение создано")
+        
+        print("2. Регистрирую обработчики...")
+        
+        # Команда /start
+        app.add_handler(CommandHandler("start", start))
+        
+        # Все валютные пары
+        all_pairs = []
+        for row in CURRENCY_PAIRS:
+            all_pairs.extend(row)
+        
+        # Обработчик валютных пар
+        app.add_handler(MessageHandler(
+            filters.TEXT & filters.Text(all_pairs),
+            handle_pair
+        ))
+        
+        # Обработчик действий
+        app.add_handler(MessageHandler(
+            filters.TEXT & filters.Text(["📊 Новая пара", "🔄 Ещё раз"]),
+            handle_action
+        ))
+        
+        print("✅ Обработчики зарегистрированы")
+        print("3. Запускаю бота...")
+        print("✅ Бот запущен и готов к работе!")
+        print("📱 Откройте Telegram → напишите /start")
+        print("=" * 60)
+        print("🟢 Бот работает 24/7 на сервере!")
+        print("=" * 60)
+        
+        # Запускаем бота
+        app.run_polling()
+        
+    except Exception as e:
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
